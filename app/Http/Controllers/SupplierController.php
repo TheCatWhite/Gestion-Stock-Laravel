@@ -12,7 +12,10 @@ class SupplierController extends Controller
      */
     public function index()
     {
-        //
+        $suppliers = Supplier::all();
+        return view('suppliers.index', [
+            'suppliers' => $suppliers,
+        ]);
     }
 
     /**
@@ -20,7 +23,7 @@ class SupplierController extends Controller
      */
     public function create()
     {
-        //
+        return view('suppliers.create');
     }
 
     /**
@@ -28,7 +31,13 @@ class SupplierController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        Supplier::create([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'address' => $request->address,
+        ]);
+        return redirect()->route('suppliers.index');
     }
 
     /**
@@ -36,7 +45,9 @@ class SupplierController extends Controller
      */
     public function show(Supplier $supplier)
     {
-        //
+        return view('suppliers.show', [
+            'supplier' => $supplier,
+        ]);
     }
 
     /**
@@ -44,7 +55,9 @@ class SupplierController extends Controller
      */
     public function edit(Supplier $supplier)
     {
-        //
+        return view('suppliers.edit', [
+            'supplier' => $supplier,
+        ]);
     }
 
     /**
@@ -52,7 +65,13 @@ class SupplierController extends Controller
      */
     public function update(Request $request, Supplier $supplier)
     {
-        //
+        $supplier->update([
+            'name' => $request->name,
+            'email' => $request->email,
+            'phone' => $request->phone,
+            'address' => $request->address,
+        ]);
+        return redirect()->route('suppliers.index');
     }
 
     /**
@@ -60,6 +79,7 @@ class SupplierController extends Controller
      */
     public function destroy(Supplier $supplier)
     {
-        //
+        $supplier->delete();
+        return redirect()->route('suppliers.index');
     }
 }

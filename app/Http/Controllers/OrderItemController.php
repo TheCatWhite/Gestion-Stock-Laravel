@@ -5,16 +5,22 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Services\OrderItemService;
 use Illuminate\Http\Request;
 
 class OrderItemController extends Controller
 {
     /**
-     * Display a listing of the order items.
+     * Afficher toutes les lignes de commande.
      */
     public function index()
     {
-        $orderItems = OrderItem::with(['order', 'product'])->get();
+        $orderItems = OrderItem::with([
+            'order',
+            'product',
+        ])
+            ->latest()
+            ->get();
 
         return view('order_items.index', [
             'orderItems' => $orderItems,
@@ -22,11 +28,11 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Show the form for creating a new order item.
+     * Afficher le formulaire d'ajout.
      */
     public function create()
     {
-        $orders = Order::all();
+        $orders = Order::latest()->get();
 
         $products = Product::active()
             ->where('stock_quantity', '>', 0)
@@ -39,54 +45,72 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Store a newly created order item.
+     * Ajouter une ligne de commande.
      */
-    public function store(Request $request)
-    {
+    public function store(
+        Request $request,
+        OrderItemService $orderItemService
+    ) {
         $request->validate([
-            'order_id' => ['required', 'exists:orders,id'],
-            'product_id' => ['required', 'exists:products,id'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'order_id' => [
+                'required',
+                'exists:orders,id',
+            ],
+
+            'product_id' => [
+                'required',
+                'exists:products,id',
+            ],
+
+            'quantity' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
         ]);
 
-        $product = Product::findOrFail($request->product_id);
+        $order = Order::findOrFail(
+            $request->order_id
+        );
 
-        if (! $product->is_active) {
+        $product = Product::findOrFail(
+            $request->product_id
+        );
+
+        try {
+
+            $orderItem = $orderItemService->addItem(
+                $order,
+                $product,
+                (int) $request->quantity
+            );
+
+        } catch (\RuntimeException $e) {
+
             return back()
                 ->withErrors([
-                    'product_id' => 'Ce produit n\'est pas disponible.',
+                    'quantity' => $e->getMessage(),
                 ])
                 ->withInput();
         }
-
-        if ($product->stock_quantity < $request->quantity) {
-            return back()
-                ->withErrors([
-                    'quantity' => 'Stock insuffisant.',
-                ])
-                ->withInput();
-        }
-
-        $orderItem = OrderItem::create([
-            'order_id' => $request->order_id,
-            'product_id' => $product->id,
-            'quantity' => $request->quantity,
-            'unit_price' => $product->selling_price,
-        ]);
-
-        $product->decrement('stock_quantity', $request->quantity);
 
         return redirect()
             ->route('order-items.show', $orderItem)
-            ->with('success', 'Produit ajouté à la commande.');
+            ->with(
+                'success',
+                'Produit ajouté à la commande.'
+            );
     }
 
     /**
-     * Display the specified order item.
+     * Afficher une ligne de commande.
      */
     public function show(OrderItem $orderItem)
     {
-        $orderItem->load(['order', 'product']);
+        $orderItem->load([
+            'order',
+            'product',
+        ]);
 
         return view('order_items.show', [
             'orderItem' => $orderItem,
@@ -94,14 +118,19 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Show the form for editing the specified order item.
+     * Afficher le formulaire de modification.
      */
     public function edit(OrderItem $orderItem)
     {
-        $orders = Order::all();
-        $products = Product::active()->get();
+        $orders = Order::latest()->get();
 
-        $orderItem->load(['order', 'product']);
+        $products = Product::active()
+            ->get();
+
+        $orderItem->load([
+            'order',
+            'product',
+        ]);
 
         return view('order_items.edit', [
             'orderItem' => $orderItem,
@@ -111,36 +140,81 @@ class OrderItemController extends Controller
     }
 
     /**
-     * Update the specified order item.
+     * Modifier une ligne de commande.
      */
-    public function update(Request $request, OrderItem $orderItem)
-    {
+    public function update(
+        Request $request,
+        OrderItem $orderItem,
+        OrderItemService $orderItemService
+    ) {
         $request->validate([
-            'order_id' => ['required', 'exists:orders,id'],
-            'product_id' => ['required', 'exists:products,id'],
-            'quantity' => ['required', 'integer', 'min:1'],
+            'order_id' => [
+                'required',
+                'exists:orders,id',
+            ],
+
+            'product_id' => [
+                'required',
+                'exists:products,id',
+            ],
+
+            'quantity' => [
+                'required',
+                'integer',
+                'min:1',
+            ],
         ]);
 
-        $orderItem->update([
-            'order_id' => $request->order_id,
-            'product_id' => $request->product_id,
-            'quantity' => $request->quantity,
-        ]);
+        $order = Order::findOrFail(
+            $request->order_id
+        );
+
+        $product = Product::findOrFail(
+            $request->product_id
+        );
+
+        try {
+
+            $orderItemService->updateItem(
+                $orderItem,
+                $order,
+                $product,
+                (int) $request->quantity
+            );
+
+        } catch (\RuntimeException $e) {
+
+            return back()
+                ->withErrors([
+                    'quantity' => $e->getMessage(),
+                ])
+                ->withInput();
+        }
 
         return redirect()
             ->route('order-items.show', $orderItem)
-            ->with('success', 'Ligne de commande modifiée.');
+            ->with(
+                'success',
+                'Ligne de commande modifiée.'
+            );
     }
 
     /**
-     * Remove the specified order item.
+     * Supprimer une ligne de commande.
      */
-    public function destroy(OrderItem $orderItem)
-    {
-        $orderItem->delete();
+    public function destroy(
+        OrderItem $orderItem,
+        OrderItemService $orderItemService
+    ) {
+        $orderItemService->removeItem(
+            $orderItem
+        );
 
         return redirect()
             ->route('order-items.index')
-            ->with('success', 'Ligne de commande supprimée.');
+            ->with(
+                'success',
+                'Ligne de commande supprimée.'
+            );
     }
 }
